@@ -1,8 +1,25 @@
-name: Shopify Price Monitor
+name: Monitor
 
 on:
   schedule:
-    - cron: '*/10 * * * *' # Runs every 10 minutes
+    # Every 5 minutes from Friday 7:00 PM to Monday 3:00 AM PST
+    # Triggers every 5 minutes on Friday (7 PM-Midnight), all day Saturday/Sunday, and Monday (Midnight-3 AM)
+    - cron: '*/5 19-23 * * 5'
+      timezone: 'America/Los_Angeles'
+    - cron: '*/5 * * * 6,0'
+      timezone: 'America/Los_Angeles'
+    - cron: '*/5 0-2 * * 1'
+      timezone: 'America/Los_Angeles'
+
+    # 2. Every 20 minutes during all other times
+    # Monday (3 AM-Midnight), Tuesday/Wednesday/Thursday (All day), and Friday (Midnight-7 PM)
+    - cron: '*/20 3-23 * * 1'
+      timezone: 'America/Los_Angeles'
+    - cron: '*/20 * * * 2-4'
+      timezone: 'America/Los_Angeles'
+    - cron: '*/20 0-18 * * 5'
+      timezone: 'America/Los_Angeles'
+      
   workflow_dispatch: # Allows you to run it manually via the Actions tab
 
 jobs:
@@ -29,7 +46,7 @@ jobs:
       - name: Run store monitor script
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python check_pedals.py
+        run: python check.py
 
       - name: Save history changes back to repo
         run: |

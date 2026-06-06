@@ -4,7 +4,7 @@ import requests
 
 # Target Endpoint configuration
 SHOPIFY_URL = "https://lovepedalcustomeffects.myshopify.com/products.json"
-STATE_FILE = "last_seen_products.json"
+STATE_FILE = "last_seen.json"
 
 # Injected automatically by the GitHub Actions workflow environment
 GITHUB_REPO = os.environ.get("GITHUB_REPOSITORY")
