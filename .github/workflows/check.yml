@@ -41,7 +41,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests
+          pip install requests pyyaml
 
       - name: Run store monitor script
         env:
@@ -52,7 +52,7 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add last_seen.json
+          git add last_seen.json log.yaml
           # Only commit if the history file actually changed to avoid empty commit failures
           git diff-index --quiet HEAD || git commit -m "Update scraped product history [skip ci]"
           git push
