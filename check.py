@@ -1,57 +1,28 @@
-import os
-import json
-import yaml
-import requests
-from datetime import datetime
+import time  # <--- Make sure 'import time' is at the top of your check.py file
 
-# Target Endpoint configurations
-SHOPIFY_URL = "https://lovepedalcustomeffects.myshopify.com/products.json"
-STATE_FILE = "last_seen.json"
-LOG_FILE = "log.yaml"
+def main(max_retries=3, delay=5):
+    data = None
 
-# Injected automatically by the GitHub Actions workflow environment
-GITHUB_REPO = os.environ.get("GITHUB_REPOSITORY")
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
-
-def load_old_products():
-    """Loads previously seen product IDs from local state file."""
-    if os.path.exists(STATE_FILE):
+    # Retry loop configuration
+    for attempt in range(1, max_retries + 1):
         try:
-            with open(STATE_FILE, "r") as f:
-                return set(json.load(f))
-        except Exception:
-            return set()
-    return set()
+            if attempt > 1:
+                print(f"Fetching data (Attempt {attempt} of {max_retries})...")
+            response = requests.get(SHOPIFY_URL, timeout=5) # 5 second network timeout limit
+            response.raise_for_status()
+            data = response.json()
+            break # Success! Break out of the retry loop immediately.
+        except Exception as e:
+            print(f"Attempt {attempt} failed: {e}")
+            if attempt < max_retries:
+                print(f"Waiting {delay} seconds before retrying...")
+                time.sleep(delay)
+            else:
+                print("All configuration retries exhausted. Exiting script execution.")
+                return # Give up completely to keep execution well under 1-minute threshold
 
-def save_current_products(product_ids):
-    """Saves current product IDs to local state file."""
-    with open(STATE_FILE, "w") as f:
-        json.dump(list(product_ids), f, indent=2)
-
-def load_history_logs():
-    """Loads existing log events from the historical YAML file."""
-    if os.path.exists(LOG_FILE):
-        try:
-            with open(LOG_FILE, "r") as f:
-                return yaml.safe_load(f) or []
-        except Exception:
-            return []
-    return []
-
-def save_history_logs(logs):
-    """Writes updated history logs back to the repository in clean YAML format."""
-    with open(LOG_FILE, "w") as f:
-        # sort_keys=False keeps the fields in the exact order we built them
-        yaml.safe_dump(logs, f, default_flow_style=False, sort_keys=False)
-
-def main():
-    try:
-        # Request data from shopify backend API
-        response = requests.get(SHOPIFY_URL, timeout=15)
-        response.raise_for_status()
-        data = response.json()
-    except Exception as e:
-        print(f"Error fetching Shopify data: {e}")
+    # Safety catch if data wasn't successfully populated
+    if not data:
         return
 
     old_ids = load_old_products()
@@ -173,6 +144,3 @@ def main():
         save_history_logs(historical_logs)
     else:
         print("No changes across inventory fields. Skipping log update.")
-
-if __name__ == "__main__":
-    main()
