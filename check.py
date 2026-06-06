@@ -1,4 +1,48 @@
-import time  # <--- Make sure 'import time' is at the top of your check.py file
+import os
+import json
+import yaml
+import time
+import requests
+from datetime import datetime
+
+# Target Endpoint configurations
+SHOPIFY_URL = "https://lovepedalcustomeffects.myshopify.com/products.json"
+STATE_FILE = "last_seen.json"
+LOG_FILE = "log.yaml"
+
+# Injected automatically by the GitHub Actions workflow environment
+GITHUB_REPO = os.environ.get("GITHUB_REPOSITORY")
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
+
+def load_old_products():
+    """Loads previously seen product IDs from local state file."""
+    if os.path.exists(STATE_FILE):
+        try:
+            with open(STATE_FILE, "r") as f:
+                return set(json.load(f))
+        except Exception:
+            return set()
+    return set()
+
+def save_current_products(product_ids):
+    """Saves current product IDs to local state file."""
+    with open(STATE_FILE, "w") as f:
+        json.dump(list(product_ids), f, indent=2)
+
+def load_history_logs():
+    """Loads existing log events from the historical YAML file."""
+    if os.path.exists(LOG_FILE):
+        try:
+            with open(LOG_FILE, "r") as f:
+                return yaml.safe_load(f) or []
+        except Exception:
+            return []
+    return []
+
+def save_history_logs(logs):
+    """Writes updated history logs back to the repository in clean YAML format."""
+    with open(LOG_FILE, "w") as f:
+        yaml.safe_dump(logs, f, default_flow_style=False, sort_keys=False)
 
 def main(max_retries=3, delay=5):
     data = None
@@ -7,21 +51,18 @@ def main(max_retries=3, delay=5):
     for attempt in range(1, max_retries + 1):
         try:
             if attempt > 1:
-                print(f"Fetching data (Attempt {attempt} of {max_retries})...")
-            response = requests.get(SHOPIFY_URL, timeout=5) # 5 second network timeout limit
+                print(f"Retrying backend fetch (Attempt {attempt}/{max_retries})...")
+            response = requests.get(SHOPIFY_URL, timeout=5)
             response.raise_for_status()
             data = response.json()
-            break # Success! Break out of the retry loop immediately.
+            break
         except Exception as e:
-            print(f"Attempt {attempt} failed: {e}")
             if attempt < max_retries:
-                print(f"Waiting {delay} seconds before retrying...")
                 time.sleep(delay)
             else:
-                print("All configuration retries exhausted. Exiting script execution.")
-                return # Give up completely to keep execution well under 1-minute threshold
+                print(f"All fetch attempts failed: {e}")
+                return
 
-    # Safety catch if data wasn't successfully populated
     if not data:
         return
 
@@ -105,8 +146,6 @@ def main(max_retries=3, delay=5):
         else:
             issue_title = f"📦 [NEW ITEM] {data['products'][0]['title'][:30]}..." if len(all_alerts) == 1 else f"📦 {len(all_alerts)} New Items Added to Store"
 
-        print(f"Inventory changes found. Dispatching GitHub Issue alert: '{issue_title}'")
-
         if GITHUB_TOKEN and GITHUB_REPO:
             url = f"https://api.github.com/repos/{GITHUB_REPO}/issues"
             headers = {
@@ -114,6 +153,7 @@ def main(max_retries=3, delay=5):
                 "Accept": "application/vnd.github+v3+json"
             }
 
+            print(f"Dispatching alert: '{issue_title}'")
             body_content = "### 🔔 Storefront Inventory Update Found!\n\n"
             if free_alerts:
                 body_content += "#### ⚠️ FREE ITEMS FOUND:\n" + "\n".join(free_alerts) + "\n\n"
@@ -130,17 +170,16 @@ def main(max_retries=3, delay=5):
                 res = requests.post(url, json=payload, headers=headers)
                 res.raise_for_status()
             except Exception as e:
-                print(f"Failed to submit issue alert: {e}")
+                print(f"Failed to submit alert: {e}")
         else:
             print("Missing GITHUB_TOKEN or GITHUB_REPOSITORY environment variables.")
-    else:
-        print("Scan complete. No new items detected on the storefront.")
 
     # Write data targets
     save_current_products(current_ids)
 
     if log_changed:
-        print("Inventory changes detected. Committing snapshots to YAML log file.")
+        print("Inventory changes saved to log.")
         save_history_logs(historical_logs)
-    else:
-        print("No changes across inventory fields. Skipping log update.")
+
+if __name__ == "__main__":
+    main()
