@@ -1,0 +1,41 @@
+name: Shopify Price Monitor
+
+on:
+  schedule:
+    - cron: '*/10 * * * *' # Runs every 10 minutes
+  workflow_dispatch: # Allows you to run it manually via the Actions tab
+
+jobs:
+  check_store:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required to update the product history state file
+      issues: write    # Required to open issues that ping GitHub Mobile
+
+    steps:
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+
+      - name: Set up Python runtime
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Run store monitor script
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python check_pedals.py
+
+      - name: Save history changes back to repo
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add last_seen_products.json
+          # Only commit if the history file actually changed to avoid empty commit failures
+          git diff-index --quiet HEAD || git commit -m "Update scraped product history [skip ci]"
+          git push
