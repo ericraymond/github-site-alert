@@ -19,11 +19,11 @@ on:
       timezone: 'America/Los_Angeles'
     - cron: '*/20 0-18 * * 5'
       timezone: 'America/Los_Angeles'
-      
+
   workflow_dispatch: # Allows you to run it manually via the Actions tab
 
 jobs:
-  check_store:
+  check:
     runs-on: ubuntu-latest
     permissions:
       contents: write  # Required to update the product history state file
