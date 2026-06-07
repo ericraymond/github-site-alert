@@ -153,20 +153,23 @@ def main(max_retries=3, delay=5):
         else:
             issue_title = f"📦 [NEW ITEM] {data['products'][0]['title'][:30]}..." if len(all_alerts) == 1 else f"📦 {len(all_alerts)} New Items Added to Store"
 
-        if SIGNAL_PHONE and SIGNAL_API_KEY and signal_alerts:
-            # Join multiple alerts with clean linebreaks
-            signal_text = "\n\n".join(signal_alerts)
-            signal_url = "https://api.callmebot.com/signal/send.php"
-            signal_payload = {
-                "phone": SIGNAL_PHONE,
-                "apikey": SIGNAL_API_KEY,
-                "text": signal_text
-            }
-            try:
-                sig_res = requests.get(signal_url, params=signal_payload, timeout=5)
-                sig_res.raise_for_status()
-            except Exception as e:
-                print(f"Failed to submit Signal notification: {e}")
+        if signal_alerts:
+            if SIGNAL_PHONE and SIGNAL_API_KEY:
+                signal_text = "\n\n".join(signal_alerts)
+                signal_url = "https://api.callmebot.com/signal/send.php"
+                signal_payload = {
+                    "phone": SIGNAL_PHONE,
+                    "apikey": SIGNAL_API_KEY,
+                    "text": signal_text
+                }
+                try:
+                    sig_res = requests.get(signal_url, params=signal_payload, timeout=5)
+                    sig_res.raise_for_status()
+                except Exception as e:
+                    print(f"Failed to submit Signal notification: {e}")
+            else:
+                print("No signal available!");
+
 
         if GITHUB_TOKEN and GITHUB_REPO:
             url = f"https://api.github.com/repos/{GITHUB_REPO}/issues"
