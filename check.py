@@ -14,6 +14,10 @@ LOG_FILE = "log.yaml"
 GITHUB_REPO = os.environ.get("GITHUB_REPOSITORY")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
 
+# Signal Notification parameters (Configure these in your GitHub Repo Secrets)
+SIGNAL_PHONE = os.environ.get("SIGNAL_PHONE")    # e.g., +15551234567
+SIGNAL_API_KEY = os.environ.get("SIGNAL_API_KEY") # The key text sent by the bot
+
 def load_old_products():
     """Loads previously seen product IDs from local state file."""
     if os.path.exists(STATE_FILE):
@@ -72,6 +76,7 @@ def main(max_retries=3, delay=5):
     # Alert queues
     free_alerts = []
     standard_alerts = []
+    signal_alerts = []
 
     # Log management variables
     historical_logs = load_history_logs()
@@ -135,8 +140,10 @@ def main(max_retries=3, delay=5):
         if p_id not in old_ids:
             if "free" in title.lower() or price == 0.0:
                 free_alerts.append(f"- 🔥 **FREE DROP:** {title} is listed for **$0.00**!\n  [Link]({item_url})")
+                signal_alerts.append(f"🔥 FREE DROP: {title} is listed for $0.00! {item_url}")
             else:
                 standard_alerts.append(f"- 📦 **New Inventory:** {title} listed for **${price:,.2f}**\n  [Link]({item_url})")
+                signal_alerts.append(f"📦 New Inventory: {title} listed for ${price:,.2f}. {item_url}")
 
     # Evaluate dynamic notification structure
     all_alerts = free_alerts + standard_alerts
@@ -145,6 +152,21 @@ def main(max_retries=3, delay=5):
             issue_title = "🚨 CRITICAL FREE ITEM DETECTED 🚨"
         else:
             issue_title = f"📦 [NEW ITEM] {data['products'][0]['title'][:30]}..." if len(all_alerts) == 1 else f"📦 {len(all_alerts)} New Items Added to Store"
+
+        if SIGNAL_PHONE and SIGNAL_API_KEY and signal_alerts:
+            # Join multiple alerts with clean linebreaks
+            signal_text = "\n\n".join(signal_alerts)
+            signal_url = "https://api.callmebot.com/signal/send.php"
+            signal_payload = {
+                "phone": SIGNAL_PHONE,
+                "apikey": SIGNAL_API_KEY,
+                "text": signal_text
+            }
+            try:
+                sig_res = requests.get(signal_url, params=signal_payload, timeout=5)
+                sig_res.raise_for_status()
+            except Exception as e:
+                print(f"Failed to submit Signal notification: {e}")
 
         if GITHUB_TOKEN and GITHUB_REPO:
             url = f"https://api.github.com/repos/{GITHUB_REPO}/issues"
