@@ -25,9 +25,11 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
-    
+
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+      SIGNAL_PHONE: ${{secrets.SIGNAL_PHONE}}
+      SIGNAL_API_KEY:  ${{secrets.SIGNAL_API_KEY}}
 
     permissions:
       contents: write  # Required to update the product history state file

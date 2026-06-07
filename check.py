@@ -168,7 +168,7 @@ def main(max_retries=3, delay=5):
                 except Exception as e:
                     print(f"Failed to submit Signal notification: {e}")
             else:
-                print(f"No signal available! {SIGNAL_PHONE} {SIGNAL_API_KEY}");
+                print(f"No signal available! {SIGNAL_PHONE}");
 
 
         if GITHUB_TOKEN and GITHUB_REPO:
