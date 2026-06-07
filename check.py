@@ -154,7 +154,9 @@ def main(max_retries=3, delay=5):
             issue_title = f"📦 [NEW ITEM] {data['products'][0]['title'][:30]}..." if len(all_alerts) == 1 else f"📦 {len(all_alerts)} New Items Added to Store"
 
         if signal_alerts:
+            print("Signal alerts")
             if SIGNAL_PHONE and SIGNAL_API_KEY:
+                print("Signalling")
                 signal_text = "\n\n".join(signal_alerts)
                 signal_url = "https://api.callmebot.com/signal/send.php"
                 signal_payload = {
