@@ -1,4 +1,6 @@
 {
-  "product_ids": [],
-  "sentinel_seen": false
+  "product_ids": [
+    "210305974295"
+  ],
+  "sentinel_seen": true
 }
