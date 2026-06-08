@@ -83,6 +83,15 @@ def main(max_retries=3, delay=5):
     signal_alerts = []
 
     historical_logs = load_history_logs()
+
+    if sentinel_previously_seen is None:
+        sentinel_id = None
+        for entry in reversed(historical_logs):
+            if SENTINEL_KEYWORD in entry.get("title", "").lower():
+                sentinel_id = entry.get("id")
+                break
+        sentinel_previously_seen = (sentinel_id in old_ids) if sentinel_id is not None else False
+
     current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_changed = False
 
