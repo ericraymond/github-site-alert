@@ -33,7 +33,6 @@ jobs:
 
     permissions:
       contents: write  # Required to update the product history state file
-      issues: write    # Required to open issues that ping GitHub Mobile
 
     steps:
       - name: Checkout repository code
@@ -49,8 +48,6 @@ jobs:
           pip install requests pyyaml
 
       - name: Run store monitor script
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python check.py
 
       - name: Save history changes back to repo

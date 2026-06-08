@@ -5,33 +5,40 @@ import time
 import requests
 from datetime import datetime
 
-# Target Endpoint configurations
 SHOPIFY_URL = "https://lovepedalcustomeffects.myshopify.com/products.json"
 STATE_FILE = "last_seen.json"
 LOG_FILE = "log.yaml"
+SENTINEL_KEYWORD = "super stud"
 
-# Injected automatically by the GitHub Actions workflow environment
-GITHUB_REPO = os.environ.get("GITHUB_REPOSITORY")
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
-
-# Signal Notification parameters (Configure these in your GitHub Repo Secrets)
-SIGNAL_PHONE = os.environ.get("SIGNAL_PHONE")    # e.g., +15551234567
-SIGNAL_API_KEY = os.environ.get("SIGNAL_API_KEY") # The key text sent by the bot
+SIGNAL_PHONE = os.environ.get("SIGNAL_PHONE")
+SIGNAL_API_KEY = os.environ.get("SIGNAL_API_KEY")
 
 def load_old_products():
-    """Loads previously seen product IDs from local state file."""
+    """Loads previously seen product IDs and sentinel presence from local state file."""
     if os.path.exists(STATE_FILE):
         try:
             with open(STATE_FILE, "r") as f:
-                return set(json.load(f))
+                data = json.load(f)
+                if isinstance(data, list):
+                    return set(data), None
+                elif isinstance(data, dict):
+                    # Load sentinel state (with fallback to legacy key)
+                    sentinel_seen = data.get("sentinel_seen")
+                    if sentinel_seen is None:
+                        legacy_key = SENTINEL_KEYWORD.replace(" ", "_") + "_seen"
+                        sentinel_seen = data.get(legacy_key)
+                    return set(data.get("product_ids", [])), sentinel_seen
         except Exception:
-            return set()
-    return set()
+            return set(), None
+    return set(), None
 
-def save_current_products(product_ids):
-    """Saves current product IDs to local state file."""
+def save_current_products(product_ids, sentinel_seen):
+    """Saves current product IDs and sentinel presence to local state file."""
     with open(STATE_FILE, "w") as f:
-        json.dump(list(product_ids), f, indent=2)
+        json.dump({
+            "product_ids": list(product_ids),
+            "sentinel_seen": sentinel_seen
+        }, f, indent=2)
 
 def load_history_logs():
     """Loads existing log events from the historical YAML file."""
@@ -51,7 +58,6 @@ def save_history_logs(logs):
 def main(max_retries=3, delay=5):
     data = None
 
-    # Retry loop configuration
     for attempt in range(1, max_retries + 1):
         try:
             if attempt > 1:
@@ -70,40 +76,35 @@ def main(max_retries=3, delay=5):
     if not data:
         return
 
-    old_ids = load_old_products()
+    old_ids, sentinel_previously_seen = load_old_products()
     current_ids = set()
+    sentinel_currently_seen = False
 
-    # Alert queues
-    free_alerts = []
-    standard_alerts = []
     signal_alerts = []
 
-    # Log management variables
     historical_logs = load_history_logs()
     current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_changed = False
 
-    # Map the absolute latest log record for every item ID to prevent duplications
     latest_snapshots = {}
     for entry in historical_logs:
         latest_snapshots[entry.get("id")] = entry
 
-    # Parse through inventory entries
     for product in data.get("products", []):
         p_id = str(product.get("id"))
         current_ids.add(p_id)
 
         title = product.get("title", "")
+        if SENTINEL_KEYWORD in title.lower():
+            sentinel_currently_seen = True
         handle = product.get("handle", "")
         item_url = f"https://lovepedalcustomeffects.myshopify.com/products/{handle}"
 
-        # Strip out basic HTML markers and clean up whitespaces in description
         raw_body = product.get("body_html", "") or ""
         clean_desc = " ".join(raw_body.replace("<br>", " ").split())[:120]
         if len(raw_body) > 120:
             clean_desc += "..."
 
-        # Isolate the core pricing and stock parameters from variants
         variants = product.get("variants", [])
         first_variant = variants[0] if variants else {}
 
@@ -115,7 +116,6 @@ def main(max_retries=3, delay=5):
 
         is_available = first_variant.get("available", False)
 
-        # Assemble current item object schema
         current_snapshot = {
             "timestamp": current_timestamp,
             "id": p_id,
@@ -126,7 +126,6 @@ def main(max_retries=3, delay=5):
             "description": clean_desc if clean_desc else "No description provided."
         }
 
-        # DEDUPLICATED HISTORY LOGGING ENGINE
         previous_snapshot = latest_snapshots.get(p_id)
         if previous_snapshot is None:
             historical_logs.append(current_snapshot)
@@ -136,73 +135,38 @@ def main(max_retries=3, delay=5):
                 historical_logs.append(current_snapshot)
                 log_changed = True
 
-        # NEW ITEM ALERT ENGINE
         if p_id not in old_ids:
             if "free" in title.lower() or price == 0.0:
-                free_alerts.append(f"- 🔥 **FREE DROP:** {title} is listed for **$0.00**!\n  [Link]({item_url})")
                 signal_alerts.append(f"🔥 FREE DROP: {title} is listed for $0.00! {item_url}")
             else:
-                standard_alerts.append(f"- 📦 **New Inventory:** {title} listed for **${price:,.2f}**\n  [Link]({item_url})")
                 signal_alerts.append(f"📦 New Inventory: {title} listed for ${price:,.2f}. {item_url}")
 
-    # Evaluate dynamic notification structure
-    all_alerts = free_alerts + standard_alerts
-    if all_alerts:
-        if free_alerts:
-            issue_title = "🚨 CRITICAL FREE ITEM DETECTED 🚨"
-        else:
-            issue_title = f"📦 [NEW ITEM] {data['products'][0]['title'][:30]}..." if len(all_alerts) == 1 else f"📦 {len(all_alerts)} New Items Added to Store"
+    if sentinel_previously_seen is not None:
+        if sentinel_previously_seen and not sentinel_currently_seen:
+            signal_alerts.append("SNS Starting")
+        elif not sentinel_previously_seen and sentinel_currently_seen:
+            signal_alerts.append("SNS Over")
 
-        if signal_alerts:
-            print("Signal alerts")
-            if SIGNAL_PHONE and SIGNAL_API_KEY:
-                print("Signalling")
-                signal_text = "\n\n".join(signal_alerts)
-                signal_url = "https://api.callmebot.com/signal/send.php"
-                signal_payload = {
-                    "phone": SIGNAL_PHONE,
-                    "apikey": SIGNAL_API_KEY,
-                    "text": signal_text
-                }
-                try:
-                    sig_res = requests.get(signal_url, params=signal_payload, timeout=5)
-                    sig_res.raise_for_status()
-                except Exception as e:
-                    print(f"Failed to submit Signal notification: {e}")
-            else:
-                print(f"No signal available! {SIGNAL_PHONE}");
-
-
-        if GITHUB_TOKEN and GITHUB_REPO:
-            url = f"https://api.github.com/repos/{GITHUB_REPO}/issues"
-            headers = {
-                "Authorization": f"Bearer {GITHUB_TOKEN}",
-                "Accept": "application/vnd.github+v3+json"
+    if signal_alerts:
+        print("Signal alerts detected.")
+        if SIGNAL_PHONE and SIGNAL_API_KEY:
+            print("Sending Signal notification...")
+            signal_text = "\n\n".join(signal_alerts)
+            signal_url = "https://api.callmebot.com/signal/send.php"
+            signal_payload = {
+                "phone": SIGNAL_PHONE,
+                "apikey": SIGNAL_API_KEY,
+                "text": signal_text
             }
-
-            print(f"Dispatching alert: '{issue_title}'")
-            body_content = "### 🔔 Storefront Inventory Update Found!\n\n"
-            if free_alerts:
-                body_content += "#### ⚠️ FREE ITEMS FOUND:\n" + "\n".join(free_alerts) + "\n\n"
-            if standard_alerts:
-                body_content += "#### Standard New Items:\n" + "\n".join(standard_alerts)
-
-            payload = {
-                "title": issue_title,
-                "body": body_content,
-                "labels": ["alert", "free"] if free_alerts else ["new-item"]
-            }
-
             try:
-                res = requests.post(url, json=payload, headers=headers)
-                res.raise_for_status()
+                sig_res = requests.get(signal_url, params=signal_payload, timeout=5)
+                sig_res.raise_for_status()
             except Exception as e:
-                print(f"Failed to submit alert: {e}")
+                print(f"Failed to submit Signal notification: {e}")
         else:
-            print("Missing GITHUB_TOKEN or GITHUB_REPOSITORY environment variables.")
+            print("Signal notification skipped: SIGNAL_PHONE or SIGNAL_API_KEY not configured.")
 
-    # Write data targets
-    save_current_products(current_ids)
+    save_current_products(current_ids, sentinel_currently_seen)
 
     if log_changed:
         print("Inventory changes saved to log.")
