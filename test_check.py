@@ -85,7 +85,7 @@ class TestCheckSentinel(unittest.TestCase):
         signal_call = mock_requests.get.call_args_list[1]
         params = signal_call[1]['params']
         self.assertIn("SNS Over", params['text'])
-        self.assertIn("📦 New Inventory: SUPER STUD awesome vintage shirt listed for $30.00.", params['text'])
+        self.assertIn("📦 New Inventory: SUPER STUD awesome vintage shirt listed for ＄30.00.", params['text'])
         mock_save_products.assert_called_with({"111", "222"}, True)
 
     @patch('check.load_old_products')

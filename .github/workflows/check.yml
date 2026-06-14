@@ -20,6 +20,9 @@ on:
     - cron: '*/20 0-18 * * 5'
       timezone: 'America/Los_Angeles'
 
+  repository_dispatch:
+    types: [trigger-monitor]
+
   workflow_dispatch: # Allows you to run it manually via the Actions tab
 
 jobs:

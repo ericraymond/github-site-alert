@@ -146,9 +146,9 @@ def main(max_retries=3, delay=5):
 
         if p_id not in old_ids:
             if "free" in title.lower() or price == 0.0:
-                signal_alerts.append(f"🔥 FREE DROP: {title} is listed for $0.00! {item_url}")
+                signal_alerts.append(f"🔥 FREE DROP: {title} is listed for ＄0.00! {item_url}")
             else:
-                signal_alerts.append(f"📦 New Inventory: {title} listed for ${price:,.2f}. {item_url}")
+                signal_alerts.append(f"📦 New Inventory: {title} listed for ＄{price:,.2f}. {item_url}")
 
     if sentinel_previously_seen is not None:
         if sentinel_previously_seen and not sentinel_currently_seen:
