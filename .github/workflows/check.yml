@@ -41,6 +41,13 @@ jobs:
       - name: Checkout repository code
         uses: actions/checkout@v4
 
+      # Checkout data branch into a subfolder 'state-data'
+      - name: Checkout state data branch
+        uses: actions/checkout@v4
+        with:
+          ref: data
+          path: state-data
+
       - name: Set up Python runtime
         uses: actions/setup-python@v5
         with:
@@ -50,14 +57,24 @@ jobs:
         run: |
           pip install requests pyyaml
 
+      # Copy existing state files to root so check.py can read them
+      - name: Copy state files to root
+        run: |
+          cp state-data/last_seen.json . || true
+          cp state-data/log.yaml . || true
+
       - name: Run store monitor script
         run: python check.py
 
-      - name: Save history changes back to repo
+      # Copy updated state files back to state-data and push to 'data' branch
+      - name: Save history changes back to data branch
         run: |
+          mkdir -p state-data
+          cp last_seen.json state-data/
+          cp log.yaml state-data/
+          cd state-data
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add last_seen.json log.yaml
-          # Only commit if the history file actually changed to avoid empty commit failures
           git diff-index --quiet HEAD || git commit -m "Update scraped product history [skip ci]"
-          git push
+          git push origin data

@@ -2,6 +2,11 @@
 
 A lightweight Shopify store inventory monitor that automatically tracks product listings and sends notifications to a Signal group/phone when new items or inventory changes are detected.
 
+## Branch Architecture
+To prevent git conflicts between your local edits and the automated script runs, this repository is split into two branches:
+* **`main`**: Contains only the code, tests, and configuration files. This is the branch you pull/push to when making code changes.
+* **`data`**: Contains only the state files ([last_seen.json](file:///Users/ericraymond/src/quad/github-site-alert/last_seen.json) and [log.yaml](file:///Users/ericraymond/src/quad/github-site-alert/log.yaml)). The GitHub Actions runner checks this branch out to a subdirectory, reads/writes the files, and pushes changes back exclusively to the `data` branch.
+
 ## How it Works
 1. **Scrapes Shopify**: Fetches products from the target store via its public `products.json` endpoint.
 2. **Detects Changes**: Compares current products against a local state file ([last_seen.json](file:///Users/ericraymond/src/quad/github-site-alert/last_seen.json)) and history log ([log.yaml](file:///Users/ericraymond/src/quad/github-site-alert/log.yaml)).
