@@ -14,30 +14,32 @@ SIGNAL_PHONE = os.environ.get("SIGNAL_PHONE")
 SIGNAL_API_KEY = os.environ.get("SIGNAL_API_KEY")
 
 def load_old_products():
-    """Loads previously seen product IDs and sentinel presence from local state file."""
+    """Loads previously seen product IDs and sentinel presence/state from local state file."""
     if os.path.exists(STATE_FILE):
         try:
             with open(STATE_FILE, "r") as f:
                 data = json.load(f)
                 if isinstance(data, list):
-                    return set(data), None
+                    return set(data), None, None
                 elif isinstance(data, dict):
                     # Load sentinel state (with fallback to legacy key)
                     sentinel_seen = data.get("sentinel_seen")
                     if sentinel_seen is None:
                         legacy_key = SENTINEL_KEYWORD.replace(" ", "_") + "_seen"
                         sentinel_seen = data.get(legacy_key)
-                    return set(data.get("product_ids", [])), sentinel_seen
+                    state = data.get("state")
+                    return set(data.get("product_ids", [])), sentinel_seen, state
         except Exception:
-            return set(), None
-    return set(), None
+            return set(), None, None
+    return set(), None, None
 
-def save_current_products(product_ids, sentinel_seen):
-    """Saves current product IDs and sentinel presence to local state file."""
+def save_current_products(product_ids, sentinel_seen, state):
+    """Saves current product IDs, sentinel presence, and state to local state file."""
     with open(STATE_FILE, "w") as f:
         json.dump({
             "product_ids": list(product_ids),
-            "sentinel_seen": sentinel_seen
+            "sentinel_seen": sentinel_seen,
+            "state": state
         }, f, indent=2)
 
 def load_history_logs():
@@ -76,9 +78,10 @@ def main(max_retries=3, delay=5):
     if not data:
         return
 
-    old_ids, sentinel_previously_seen = load_old_products()
+    old_ids, sentinel_previously_seen, previous_state = load_old_products()
     current_ids = set()
     sentinel_currently_seen = False
+    current_other_items_present = False
 
     signal_alerts = []
 
@@ -91,6 +94,15 @@ def main(max_retries=3, delay=5):
                 sentinel_id = entry.get("id")
                 break
         sentinel_previously_seen = (sentinel_id in old_ids) if sentinel_id is not None else False
+
+    if previous_state is None:
+        if not sentinel_previously_seen:
+            previous_state = "sns_active"
+        else:
+            if len(old_ids) > 1:
+                previous_state = "end_in_sight"
+            else:
+                previous_state = "idle"
 
     current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_changed = False
@@ -106,6 +118,8 @@ def main(max_retries=3, delay=5):
         title = product.get("title", "")
         if SENTINEL_KEYWORD in title.lower():
             sentinel_currently_seen = True
+        else:
+            current_other_items_present = True
         handle = product.get("handle", "")
         item_url = f"https://lovepedalcustomeffects.myshopify.com/products/{handle}"
 
@@ -150,10 +164,19 @@ def main(max_retries=3, delay=5):
             else:
                 signal_alerts.append(f"📦 New Inventory: {title} listed for ＄{price:,.2f}. {item_url}")
 
-    if sentinel_previously_seen is not None:
-        if sentinel_previously_seen and not sentinel_currently_seen:
+    if not sentinel_currently_seen:
+        current_state = "sns_active"
+    elif current_other_items_present:
+        current_state = "end_in_sight"
+    else:
+        current_state = "idle"
+
+    if previous_state != current_state:
+        if current_state == "sns_active":
             signal_alerts.append("SNS Starting")
-        elif not sentinel_previously_seen and sentinel_currently_seen:
+        elif previous_state == "sns_active" and current_state == "end_in_sight":
+            signal_alerts.append("End in Sight")
+        elif current_state == "idle":
             signal_alerts.append("SNS Over")
 
     if signal_alerts:
@@ -175,7 +198,7 @@ def main(max_retries=3, delay=5):
         else:
             print("Signal notification skipped: SIGNAL_PHONE or SIGNAL_API_KEY not configured.")
 
-    save_current_products(current_ids, sentinel_currently_seen)
+    save_current_products(current_ids, sentinel_currently_seen, current_state)
 
     if log_changed:
         print("Inventory changes saved to log.")
