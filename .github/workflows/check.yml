@@ -107,14 +107,7 @@ jobs:
           echo "Current state is: $state"
           
           # Check if we are already in the weekend 5-minute cron window
-          is_weekend_cron=$(python3 -c '
-import datetime, zoneinfo
-tz = zoneinfo.ZoneInfo("America/Los_Angeles")
-now = datetime.datetime.now(tz)
-day = now.weekday()
-hour = now.hour
-print((day == 4 and hour >= 19) or (day in (5, 6)) or (day == 0 and hour < 3))
-')
+          is_weekend_cron=$(python3 -c "import datetime, zoneinfo; tz = zoneinfo.ZoneInfo('America/Los_Angeles'); now = datetime.datetime.now(tz); day = now.weekday(); hour = now.hour; print((day == 4 and hour >= 19) or (day in (5, 6)) or (day == 0 and hour < 3))")
           echo "Is weekend cron active? $is_weekend_cron"
           
           # Determine sleep duration:
