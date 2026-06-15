@@ -15,18 +15,13 @@ To prevent git conflicts between your local edits and the automated script runs,
 
 ---
 
-## Scheduling & Triggers (External Cron)
+## Scheduling & Triggers (Native Cron & Self-Triggering Loop)
 
-### ⚠️ GitHub Actions Cron Limitation
-GitHub Actions scheduled workflows (`cron`) run on a best-effort basis and are subject to massive queueing delays in free/public repositories (often delayed by minutes to hours, or skipped entirely).
+This repository uses a hybrid scheduling architecture designed to bypass GitHub Actions cron delays and external trigger limits:
 
-### Recommended Setup: External Cron (Pipedream)
-To ensure the monitor runs reliably on a precise schedule (e.g. every 5 minutes):
-* **Pipedream (or other external cron services)** is used to trigger the workflow externally.
-* This is done by scheduling a Pipedream workflow to run every 5 minutes, which triggers the **`workflow_dispatch`** or **`repository_dispatch`** event in this repository.
-* The internal GitHub `schedule:` cron in [.github/workflows/check.yml](file:///Users/ericraymond/src/quad/github-site-alert/.github/workflows/check.yml) has been commented out to prevent redundant/delayed runs.
-
-### How to trigger it externally:
-Create a Pipedream workflow on a 5-minute schedule using the **GitHub - Create Workflow Dispatch** action pointing to:
-- **Workflow**: `check.yml`
-- **Ref**: `main`
+1. **Native GitHub Actions Cron Fallback**: The workflow in [.github/workflows/check.yml](file:///Users/ericraymond/src/quad/github-site-alert/.github/workflows/check.yml) is scheduled natively to trigger every 5 minutes on weekends (expected sale times) and every 20 minutes on weekdays.
+2. **Continuous Self-Triggering Loop**: To ensure 100% reliable execution (bypassing any native cron delays), the workflow runs a continuous self-triggering loop (daemon).
+   - Once started, the workflow calculates the appropriate interval: 5 minutes during weekends or active sales, and 20 minutes during weekdays.
+   - At the end of a run, it sleeps for the calculated duration and dispatches a new workflow run to trigger itself.
+   - The native scheduled cron acts as a self-healing fallback to restart the loop if it ever gets cancelled or fails due to network issues.
+3. **Pipedream / External Triggers**: No external cron services or tokens are required.

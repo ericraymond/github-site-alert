@@ -36,8 +36,26 @@ jobs:
 
     permissions:
       contents: write  # Required to update the product history state file
+      actions: write   # Required to trigger workflow dispatch loop
 
     steps:
+      - name: Prevent duplicate scheduled runs
+        if: github.event_name == 'schedule'
+        run: |
+          in_progress_runs=$(curl -s -L \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/runs?status=in_progress")
+          
+          in_progress_count=$(echo "$in_progress_runs" | jq '[.workflow_runs[] | select(.name == "Monitor")] | length')
+          echo "In-progress Monitor runs: $in_progress_count"
+          
+          if [ "$in_progress_count" -gt 1 ]; then
+            echo "Another Monitor run is already in progress. Exiting scheduled run to prevent duplicates."
+            exit 0
+          fi
+
       - name: Checkout repository code
         uses: actions/checkout@v4
 
@@ -78,3 +96,49 @@ jobs:
           git add last_seen.json log.yaml
           git diff-index --quiet HEAD || git commit -m "Update scraped product history [skip ci]"
           git push origin data
+
+      - name: Trigger next check in self loop
+        run: |
+          if [ -f last_seen.json ]; then
+            state=$(jq -r '.state' last_seen.json)
+          else
+            state="idle"
+          fi
+          echo "Current state is: $state"
+          
+          # Check if we are already in the weekend 5-minute cron window
+          is_weekend_cron=$(python3 -c '
+import datetime, zoneinfo
+tz = zoneinfo.ZoneInfo("America/Los_Angeles")
+now = datetime.datetime.now(tz)
+day = now.weekday()
+hour = now.hour
+print((day == 4 and hour >= 19) or (day in (5, 6)) or (day == 0 and hour < 3))
+')
+          echo "Is weekend cron active? $is_weekend_cron"
+          
+          # Determine sleep duration:
+          # - Active sale: 5 minutes (300 seconds)
+          # - Weekend: 5 minutes (300 seconds)
+          # - Weekday idle: 20 minutes (1200 seconds)
+          if [ "$state" = "sns_active" ] || [ "$state" = "end_in_sight" ]; then
+            echo "Active sale detected. Sleep duration: 5 minutes."
+            sleep_time=300
+          elif [ "$is_weekend_cron" = "True" ]; then
+            echo "Weekend window detected. Sleep duration: 5 minutes."
+            sleep_time=300
+          else
+            echo "Weekday idle state. Sleep duration: 20 minutes."
+            sleep_time=1200
+          fi
+          
+          echo "Sleeping $sleep_time seconds..."
+          sleep $sleep_time
+          
+          echo "Triggering next monitor run..."
+          curl -L -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/${{ github.repository }}/dispatches \
+            -d '{"event_type": "trigger-monitor"}'
