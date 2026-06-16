@@ -173,7 +173,10 @@ def main(max_retries=3, delay=5):
 
     if previous_state != current_state:
         if current_state == "sns_active":
-            signal_alerts.append("SNS Starting")
+            if previous_state == "end_in_sight":
+                signal_alerts.append("Just Kidding")
+            else:
+                signal_alerts.append("SNS Starting")
         elif previous_state == "sns_active" and current_state == "end_in_sight":
             signal_alerts.append("End in Sight")
         elif current_state == "idle":
