@@ -2,23 +2,22 @@ name: Monitor
 
 on:
   schedule:
-    # Every 5 minutes from Friday 7:00 PM to Monday 3:00 AM PST
-    # Triggers every 5 minutes on Friday (7 PM-Midnight), all day Saturday/Sunday, and Monday (Midnight-3 AM)
-    - cron: '*/5 19-23 * * 5'
-      timezone: 'America/Los_Angeles'
-    - cron: '*/5 * * * 6,0'
-      timezone: 'America/Los_Angeles'
-    - cron: '*/5 0-2 * * 1'
-      timezone: 'America/Los_Angeles'
-
-    # 2. Every 20 minutes during all other times
-    # Monday (3 AM-Midnight), Tuesday/Wednesday/Thursday (All day), and Friday (Midnight-7 PM)
-    - cron: '*/20 3-23 * * 1'
-      timezone: 'America/Los_Angeles'
-    - cron: '*/20 * * * 2-4'
-      timezone: 'America/Los_Angeles'
-    - cron: '*/20 0-18 * * 5'
-      timezone: 'America/Los_Angeles'
+    - cron: '*/5 * * * *'
+    # Complex schedule commented out (useful if we have to manage billing/usage limits in the future):
+    # # 1. Every 5 minutes from Friday 7:00 PM to Monday 3:00 AM PST
+    # - cron: '*/5 19-23 * * 5'
+    #   timezone: 'America/Los_Angeles'
+    # - cron: '*/5 * * * 6,0'
+    #   timezone: 'America/Los_Angeles'
+    # - cron: '*/5 0-2 * * 1'
+    #   timezone: 'America/Los_Angeles'
+    # # 2. Every 20 minutes during all other times
+    # - cron: '*/20 3-23 * * 1'
+    #   timezone: 'America/Los_Angeles'
+    # - cron: '*/20 * * * 2-4'
+    #   timezone: 'America/Los_Angeles'
+    # - cron: '*/20 0-18 * * 5'
+    #   timezone: 'America/Los_Angeles'
 
   repository_dispatch:
     types: [trigger-monitor]
@@ -28,6 +27,7 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -39,20 +39,25 @@ jobs:
       actions: write   # Required to trigger workflow dispatch loop
 
     steps:
-      - name: Prevent duplicate scheduled runs
-        if: github.event_name == 'schedule'
+      - name: Prevent duplicate runs
         run: |
           in_progress_runs=$(curl -s -L \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/runs?status=in_progress")
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/check.yml/runs")
           
-          in_progress_count=$(echo "$in_progress_runs" | jq '[.workflow_runs[] | select(.name == "Monitor")] | length')
-          echo "In-progress Monitor runs: $in_progress_count"
+          duplicate_runs_details=$(echo "$in_progress_runs" | jq \
+            --arg cur "${{ github.run_id }}" \
+            --arg par "${{ github.event.client_payload.parent_run_id }}" \
+            '[ (.workflow_runs // [])[] | select(.status != "completed" and (.id | tostring) != $cur and ($par == "" or (.id | tostring) != $par)) | {id, html_url, status, event} ]')
           
-          if [ "$in_progress_count" -gt 1 ]; then
-            echo "Another Monitor run is already in progress. Exiting scheduled run to prevent duplicates."
+          duplicate_runs_count=$(echo "$duplicate_runs_details" | jq 'length')
+          echo "Duplicate Monitor runs in progress: $duplicate_runs_count"
+          echo "Details: $duplicate_runs_details"
+          
+          if [ "$duplicate_runs_count" -gt 0 ]; then
+            echo "Another Monitor run is already in progress. Exiting to prevent duplicates."
             exit 0
           fi
 
@@ -99,31 +104,34 @@ jobs:
 
       - name: Trigger next check in self loop
         run: |
-          if [ -f last_seen.json ]; then
-            state=$(jq -r '.state' last_seen.json)
-          else
-            state="idle"
-          fi
-          echo "Current state is: $state"
+          sleep_time=300
           
-          # Check if we are already in the weekend 5-minute cron window
-          is_weekend_cron=$(python3 -c "import datetime, zoneinfo; tz = zoneinfo.ZoneInfo('America/Los_Angeles'); now = datetime.datetime.now(tz); day = now.weekday(); hour = now.hour; print((day == 4 and hour >= 19) or (day in (5, 6)) or (day == 0 and hour < 3))")
-          echo "Is weekend cron active? $is_weekend_cron"
-          
-          # Determine sleep duration:
-          # - Active sale: 5 minutes (300 seconds)
-          # - Weekend: 5 minutes (300 seconds)
-          # - Weekday idle: 20 minutes (1200 seconds)
-          if [ "$state" = "sns_active" ] || [ "$state" = "end_in_sight" ]; then
-            echo "Active sale detected. Sleep duration: 5 minutes."
-            sleep_time=300
-          elif [ "$is_weekend_cron" = "True" ]; then
-            echo "Weekend window detected. Sleep duration: 5 minutes."
-            sleep_time=300
-          else
-            echo "Weekday idle state. Sleep duration: 20 minutes."
-            sleep_time=1200
-          fi
+          # Complex billing/state-sensitive logic commented out:
+          # if [ -f last_seen.json ]; then
+          #   state=$(jq -r '.state' last_seen.json)
+          # else
+          #   state="idle"
+          # fi
+          # echo "Current state is: $state"
+          # 
+          # # Check if we are already in the weekend 5-minute cron window
+          # is_weekend_cron=$(python3 -c "import datetime, zoneinfo; tz = zoneinfo.ZoneInfo('America/Los_Angeles'); now = datetime.datetime.now(tz); day = now.weekday(); hour = now.hour; print((day == 4 and hour >= 19) or (day in (5, 6)) or (day == 0 and hour < 3))")
+          # echo "Is weekend cron active? $is_weekend_cron"
+          # 
+          # # Determine sleep duration:
+          # # - Active sale: 5 minutes (300 seconds)
+          # # - Weekend: 5 minutes (300 seconds)
+          # # - Weekday idle: 20 minutes (1200 seconds)
+          # if [ "$state" = "sns_active" ] || [ "$state" = "end_in_sight" ]; then
+          #   echo "Active sale detected. Sleep duration: 5 minutes."
+          #   sleep_time=300
+          # elif [ "$is_weekend_cron" = "True" ]; then
+          #   echo "Weekend window detected. Sleep duration: 5 minutes."
+          #   sleep_time=300
+          # else
+          #   echo "Weekday idle state. Sleep duration: 20 minutes."
+          #   sleep_time=1200
+          # fi
           
           echo "Sleeping $sleep_time seconds..."
           sleep $sleep_time
@@ -134,4 +142,4 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             https://api.github.com/repos/${{ github.repository }}/dispatches \
-            -d '{"event_type": "trigger-monitor"}'
+            -d '{"event_type": "trigger-monitor", "client_payload": {"parent_run_id": "${{ github.run_id }}"}}'
