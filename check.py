@@ -163,6 +163,17 @@ def main(max_retries=3, delay=5):
                 signal_alerts.append(f"🔥 FREE DROP: {title} is listed for ＄0.00! {item_url}")
             else:
                 signal_alerts.append(f"📦 New Inventory: {title} listed for ＄{price:,.2f}. {item_url}")
+        else:
+            if previous_snapshot is not None:
+                old_price = previous_snapshot.get("price")
+                old_available = previous_snapshot.get("available")
+                if old_available != is_available:
+                    if not is_available:
+                        signal_alerts.append(f"🔴 SOLD OUT: {title} is now sold out. {item_url}")
+                    else:
+                        signal_alerts.append(f"🟢 Back in Stock: {title} is now available for ＄{price:,.2f}! {item_url}")
+                if old_price != price:
+                    signal_alerts.append(f"💰 Price Change: {title} is now ＄{price:,.2f} (was ＄{old_price:,.2f}). {item_url}")
 
     if not sentinel_currently_seen:
         current_state = "sns_active"

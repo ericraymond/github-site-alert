@@ -363,6 +363,139 @@ class TestCheckSentinel(unittest.TestCase):
         self.assertEqual(mock_requests.get.call_count, 1)
         mock_save_products.assert_called_with({"111", "222"}, True, "end_in_sight")
 
+    @patch('check.load_old_products')
+    @patch('check.save_current_products')
+    @patch('check.load_history_logs')
+    @patch('check.save_history_logs')
+    def test_price_change_alert(self, mock_save_history, mock_load_history, mock_save_products, mock_load_products):
+        mock_load_products.return_value = ({"111"}, False, "sns_active")
+        mock_load_history.return_value = [
+            {"id": "111", "title": "T-Shirt", "price": 19.99, "available": True}
+        ]
+        
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "products": [
+                {
+                    "id": 111,
+                    "title": "T-Shirt",
+                    "handle": "t-shirt",
+                    "body_html": "Cool shirt",
+                    "variants": [{"price": "14.99", "available": True}]
+                }
+            ]
+        }
+        mock_requests.get.return_value = mock_response
+        mock_requests.get.reset_mock()
+        
+        with patch('check.SIGNAL_PHONE', '+15551234567'), patch('check.SIGNAL_API_KEY', 'dummy_key'):
+            check.main()
+            
+        self.assertEqual(mock_requests.get.call_count, 2)
+        signal_call = mock_requests.get.call_args_list[1]
+        params = signal_call[1]['params']
+        self.assertIn("💰 Price Change: T-Shirt is now ＄14.99 (was ＄19.99).", params['text'])
+
+    @patch('check.load_old_products')
+    @patch('check.save_current_products')
+    @patch('check.load_history_logs')
+    @patch('check.save_history_logs')
+    def test_sold_out_alert(self, mock_save_history, mock_load_history, mock_save_products, mock_load_products):
+        mock_load_products.return_value = ({"111"}, False, "sns_active")
+        mock_load_history.return_value = [
+            {"id": "111", "title": "T-Shirt", "price": 19.99, "available": True}
+        ]
+        
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "products": [
+                {
+                    "id": 111,
+                    "title": "T-Shirt",
+                    "handle": "t-shirt",
+                    "body_html": "Cool shirt",
+                    "variants": [{"price": "19.99", "available": False}]
+                }
+            ]
+        }
+        mock_requests.get.return_value = mock_response
+        mock_requests.get.reset_mock()
+        
+        with patch('check.SIGNAL_PHONE', '+15551234567'), patch('check.SIGNAL_API_KEY', 'dummy_key'):
+            check.main()
+            
+        self.assertEqual(mock_requests.get.call_count, 2)
+        signal_call = mock_requests.get.call_args_list[1]
+        params = signal_call[1]['params']
+        self.assertIn("🔴 SOLD OUT: T-Shirt is now sold out.", params['text'])
+
+    @patch('check.load_old_products')
+    @patch('check.save_current_products')
+    @patch('check.load_history_logs')
+    @patch('check.save_history_logs')
+    def test_back_in_stock_alert(self, mock_save_history, mock_load_history, mock_save_products, mock_load_products):
+        mock_load_products.return_value = ({"111"}, False, "sns_active")
+        mock_load_history.return_value = [
+            {"id": "111", "title": "T-Shirt", "price": 19.99, "available": False}
+        ]
+        
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "products": [
+                {
+                    "id": 111,
+                    "title": "T-Shirt",
+                    "handle": "t-shirt",
+                    "body_html": "Cool shirt",
+                    "variants": [{"price": "19.99", "available": True}]
+                }
+            ]
+        }
+        mock_requests.get.return_value = mock_response
+        mock_requests.get.reset_mock()
+        
+        with patch('check.SIGNAL_PHONE', '+15551234567'), patch('check.SIGNAL_API_KEY', 'dummy_key'):
+            check.main()
+            
+        self.assertEqual(mock_requests.get.call_count, 2)
+        signal_call = mock_requests.get.call_args_list[1]
+        params = signal_call[1]['params']
+        self.assertIn("🟢 Back in Stock: T-Shirt is now available for ＄19.99!", params['text'])
+
+    @patch('check.load_old_products')
+    @patch('check.save_current_products')
+    @patch('check.load_history_logs')
+    @patch('check.save_history_logs')
+    def test_price_and_availability_change_alert(self, mock_save_history, mock_load_history, mock_save_products, mock_load_products):
+        mock_load_products.return_value = ({"111"}, False, "sns_active")
+        mock_load_history.return_value = [
+            {"id": "111", "title": "T-Shirt", "price": 19.99, "available": False}
+        ]
+        
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "products": [
+                {
+                    "id": 111,
+                    "title": "T-Shirt",
+                    "handle": "t-shirt",
+                    "body_html": "Cool shirt",
+                    "variants": [{"price": "24.99", "available": True}]
+                }
+            ]
+        }
+        mock_requests.get.return_value = mock_response
+        mock_requests.get.reset_mock()
+        
+        with patch('check.SIGNAL_PHONE', '+15551234567'), patch('check.SIGNAL_API_KEY', 'dummy_key'):
+            check.main()
+            
+        self.assertEqual(mock_requests.get.call_count, 2)
+        signal_call = mock_requests.get.call_args_list[1]
+        params = signal_call[1]['params']
+        self.assertIn("🟢 Back in Stock: T-Shirt is now available for ＄24.99!", params['text'])
+        self.assertIn("💰 Price Change: T-Shirt is now ＄24.99 (was ＄19.99).", params['text'])
+
 
 class TestLoadSaveState(unittest.TestCase):
     @patch('os.path.exists')
