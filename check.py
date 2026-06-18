@@ -5,7 +5,8 @@ import time
 import requests
 from datetime import datetime
 
-SHOPIFY_URL = "https://lovepedalcustomeffects.myshopify.com/products.json"
+MAIN_URL = "https://lovepedalcustomeffects.myshopify.com"
+SHOPIFY_URL = f"{MAIN_URL}/products.json"
 STATE_FILE = "last_seen.json"
 LOG_FILE = "log.yaml"
 SENTINEL_KEYWORD = "super stud"
@@ -121,7 +122,7 @@ def main(max_retries=3, delay=5):
         else:
             current_other_items_present = True
         handle = product.get("handle", "")
-        item_url = f"https://lovepedalcustomeffects.myshopify.com/products/{handle}"
+        item_url = f"{MAIN_URL}/products/{handle}"
 
         raw_body = product.get("body_html", "") or ""
         clean_desc = " ".join(raw_body.replace("<br>", " ").split())[:120]
@@ -197,7 +198,7 @@ def main(max_retries=3, delay=5):
         print("Signal alerts detected.")
         if SIGNAL_PHONE and SIGNAL_API_KEY:
             print("Sending Signal notification...")
-            signal_text = "\n\n".join(signal_alerts)
+            signal_text = "\n\n".join(signal_alerts) + f"\n\nAll SNS: {MAIN_URL}"
             signal_url = "https://api.callmebot.com/signal/send.php"
             signal_payload = {
                 "phone": SIGNAL_PHONE,

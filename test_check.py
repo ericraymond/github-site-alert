@@ -46,7 +46,7 @@ class TestCheckSentinel(unittest.TestCase):
         self.assertEqual(mock_requests.get.call_count, 2)
         signal_call = mock_requests.get.call_args_list[1]
         params = signal_call[1]['params']
-        self.assertEqual(params['text'], "SNS Starting")
+        self.assertEqual(params['text'], "SNS Starting\n\nAll SNS: https://lovepedalcustomeffects.myshopify.com")
         mock_save_products.assert_called_with({"111"}, False, "sns_active")
 
     @patch('check.load_old_products')
@@ -118,7 +118,7 @@ class TestCheckSentinel(unittest.TestCase):
         self.assertEqual(mock_requests.get.call_count, 2)
         signal_call = mock_requests.get.call_args_list[1]
         params = signal_call[1]['params']
-        self.assertEqual(params['text'], "SNS Over")
+        self.assertEqual(params['text'], "SNS Over\n\nAll SNS: https://lovepedalcustomeffects.myshopify.com")
         mock_save_products.assert_called_with({"222"}, True, "idle")
 
     @patch('check.load_old_products')
@@ -187,7 +187,7 @@ class TestCheckSentinel(unittest.TestCase):
         self.assertEqual(mock_requests.get.call_count, 2)
         signal_call = mock_requests.get.call_args_list[1]
         params = signal_call[1]['params']
-        self.assertEqual(params['text'], "Just Kidding")
+        self.assertEqual(params['text'], "Just Kidding\n\nAll SNS: https://lovepedalcustomeffects.myshopify.com")
         mock_save_products.assert_called_with({"111"}, False, "sns_active")
 
     @patch('check.load_old_products')
@@ -263,7 +263,7 @@ class TestCheckSentinel(unittest.TestCase):
         self.assertEqual(mock_requests.get.call_count, 2)
         signal_call = mock_requests.get.call_args_list[1]
         params = signal_call[1]['params']
-        self.assertEqual(params['text'], "Just Kidding")
+        self.assertEqual(params['text'], "Just Kidding\n\nAll SNS: https://lovepedalcustomeffects.myshopify.com")
         mock_save_products.assert_called_with({"111"}, False, "sns_active")
 
     @patch('check.load_old_products')
