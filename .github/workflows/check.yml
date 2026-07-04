@@ -58,7 +58,7 @@ jobs:
           
           if [ "$duplicate_runs_count" -gt 0 ]; then
             echo "Another Monitor run is already in progress. Exiting to prevent duplicates."
-            exit 0
+            exit 1
           fi
 
       - name: Checkout repository code
