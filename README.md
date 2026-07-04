@@ -23,7 +23,10 @@ This repository uses a hybrid scheduling architecture designed to bypass GitHub 
 * **Continuous Self-Triggering Loop**: To ensure 100% reliable execution (bypassing any native cron delays), the workflow runs a continuous self-triggering loop (daemon).
    - At the end of a run, it sleeps for the configured duration and dispatches a new workflow run to trigger itself.
    - The native scheduled cron acts as a self-healing fallback to restart the loop if it ever gets cancelled or fails due to network issues.
-* **Pipedream / External Triggers**: No external cron services or tokens are required. This is currently disabled.
+* **Pipedream / External Triggers**: No external cron services or tokens are required. This is currently **disabled**.
+
+### Limit of one concurrent job
+Each job queries the currently active jobs and exits if any others are found
 
 ## Triggering an End-to-End Test
 - Easiest method is to edit directly on githhub.com `last_seen.json` on the`data` branch.
