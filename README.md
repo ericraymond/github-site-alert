@@ -19,9 +19,8 @@ To prevent git conflicts between your local edits and the automated script runs,
 
 This repository uses a hybrid scheduling architecture designed to bypass GitHub Actions cron delays and external trigger limits:
 
-1. **Native GitHub Actions Cron Fallback**: The workflow in [.github/workflows/check.yml](file:///Users/ericraymond/src/quad/github-site-alert/.github/workflows/check.yml) is scheduled natively to trigger every 5 minutes on weekends (expected sale times) and every 20 minutes on weekdays.
+1. **Native GitHub Actions Cron Fallback**: The workflow in [.github/workflows/check.yml](file:///Users/ericraymond/src/quad/github-site-alert/.github/workflows/check.yml) is scheduled natively to trigger every 5 minutes.
 2. **Continuous Self-Triggering Loop**: To ensure 100% reliable execution (bypassing any native cron delays), the workflow runs a continuous self-triggering loop (daemon).
-   - Once started, the workflow calculates the appropriate interval: 5 minutes during weekends or active sales, and 20 minutes during weekdays.
-   - At the end of a run, it sleeps for the calculated duration and dispatches a new workflow run to trigger itself.
+   - At the end of a run, it sleeps for the configured duration and dispatches a new workflow run to trigger itself.
    - The native scheduled cron acts as a self-healing fallback to restart the loop if it ever gets cancelled or fails due to network issues.
-3. **Pipedream / External Triggers**: No external cron services or tokens are required.
+3. **Pipedream / External Triggers**: No external cron services or tokens are required. This is currently disabled.
